@@ -5,13 +5,14 @@ module main(clock_in,A,B,C,D,E,F,G,anode,button,BIN2,TMP);
 	input clock_in;
 	output [3:0] anode;
 	input button;
+	output TMP;
 	output A,B,C,D,E,F,G;
 	output [3:0] BIN2; //Wyjście rejestru na diody
-	input TMP;
 	
 	wire Clk1Hz; //1Hz zegar
 	wire E_Reset;
 	wire Reset;		//Reset licznika bębna
+	wire Score;
 	
 	//Połaczenia dla bębna nr.1
 	wire [3:0] BIN; //  Połaczenie Licznik  -> Rejestr (Zapisanei liczby pseudo losowej)
@@ -19,7 +20,7 @@ module main(clock_in,A,B,C,D,E,F,G,anode,button,BIN2,TMP);
 	wire [3:0] BIN3; //Połaczenie Bęben -> Komparator
 	wire Enable; 	//Włączenie Rejestru SISO, odliczającego 5sekund 
 	wire ClkToCNT; //Połaczenie zegara z licznikiem, generacja wartości losowej
-	
+	 
 	//Połaczenia dla bębna nr.2
 	wire [3:0] S_BIN; //  Połaczenie Licznik  -> Rejestr (Zapisanei liczby pseudo losowej)
 	wire [3:0] S_BIN2; // Połaczenie Wyjścia rejestru -> Komparator, Kiedy bęben osiągnie wartość z rejestru nastąpi zatrzymanie 
@@ -61,15 +62,18 @@ module main(clock_in,A,B,C,D,E,F,G,anode,button,BIN2,TMP);
 	CNT T_Licznik(.CLK(T_ClkToCNT), .CLR(0),.E(1),.Q(T_BIN));
 	REG T_Rejestr(.D(T_BIN),.CLK(T_ClkToCNT),.CLR(0),.Button(button),.Q(T_BIN2)); 
 	CNT T_Beben1(.CLK(Clk1Hz), .CLR(Reset),.E(T_Enable),.Q(T_BIN3));	
-	COMP T_Komparator(.R(T_BIN2),.L(T_BIN3),.E(T_Enable));
+	COMP T_Komparator(.R(T_BIN2),.L(T_BIN3),.E(T_Enable)); 
 	
 	KomparatorBebnow KomparatorDoRejestu(.Comp1(Enable),.Comp2(S_Enable),.Comp3(T_Enable),.E(E_Reset));
 	SISO RS_ISO(.CLK(Clk1Hz),.SI(E_Reset),.SO(Reset));
+	assign TMP = E_Reset;
+	
+	KomparatorRejestru Wynik(.Rej1(BIN2),.Rej2(S_BIN2),.Rej3(T_BIN3),.R(Score));
 	
 	Clock_divider100kHZ CLKto7SEG(.clock_in(clock_in),.clock_out(clock10kHz));
 	refreshcounter RefreshDigit(.refresh_clock(clock10kHz),.refreshcounter(refreshcounter));
 	anode_control anoda(.refreshcounter(refreshcounter),.anode(anode));
-	BCD_control BCDSEG(.digit1(BIN3),.digit2(S_BIN3),.digit3(T_BIN3),.refreshcounter(refreshcounter),.ONE_DIGIT(Digit));
+	BCD_control BCDSEG(.digit1(BIN3),.digit2(S_BIN3),.digit3(T_BIN3),.digit4(Score),.refreshcounter(refreshcounter),.ONE_DIGIT(Digit));
 	SEG7 Wyswietlacz1(.BIN(Digit),.A(A),.B(B),.C(C),.D(D),.E(E),.F(F),.G(G));
 
 	 
@@ -219,10 +223,27 @@ module KomparatorBebnow(Comp1,Comp2,Comp3,E);
 	
 always@(Comp1,Comp2,Comp3)
 	begin
-	if((Comp1!=1) || (Comp2!=1) || (Comp3!=1))
-		E<=1'b1;
-	else if((Comp1==1) && (Comp2==1) && (Comp3==1))
+	if((Comp1==0) && (Comp2==0) && (Comp3==0))
 		E<=1'b0;
+	else 
+		E<=1'b1;
+	end
+endmodule
+
+//Komparator wyników
+module KomparatorRejestru(Rej1,Rej2,Rej3,R);
+	input [3:0] Rej1;
+	input [3:0] Rej2;
+	input [3:0] Rej3;
+	output [3:0] R;
+	reg [3:0] R;
+	
+always@(Rej1,Rej2,Rej3)
+	begin
+	if((Rej1==Rej2) && (Rej1==Rej3))
+		R<=Rej1;
+	else 
+		R<=4'b0000;
 	end
 endmodule
 
